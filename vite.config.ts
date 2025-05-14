@@ -10,4 +10,14 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),  // Set '@' to refer to the 'src' directory
     },
   },
+  server: {
+    proxy: {
+      // Proxy API requests to the backend during development
+      '/api': {
+        target: 'https://ai-calc-backend-cira.onrender.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  },
 });

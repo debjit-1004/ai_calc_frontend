@@ -26,13 +26,22 @@ interface Position {
 
 // Declare global MathJax type
 declare global {
-    interface Window {
-      MathJax: {
-        typeset: () => void;
-        tex2svg: (input: string) => HTMLElement;
-        // Add other MathJax methods you're using
-      };
-    }
+      interface Window {
+              MathJax: {
+                typesetPromise: (elements?: HTMLElement[]) => Promise<void>;
+                tex2svg?: (input: string) => HTMLElement;
+                startup?: {
+                  promise?: Promise<void>;
+                  typeset?: boolean;
+                };
+                tex?: {
+                  inlineMath?: Array<[string, string]>;
+                };
+                svg?: {
+                  fontCache?: string;
+                };
+              };
+            }
   }
   
 
@@ -44,13 +53,17 @@ export default function Home() {
     const [dictOfVars, setDictOfVars] = useState<Record<string, string>>({});
     const [result, setResult] = useState<GeneratedResult | undefined>();
     const [latexPosition, setLatexPosition] = useState<Position>({ x: 10, y: 200 });
-    const [latexExpression, setLatexExpression] = useState<string[]>([]);
-
-    useEffect(() => {
+    const [latexExpression, setLatexExpression] = useState<string[]>([]);    useEffect(() => {
         if (latexExpression.length > 0 && window.MathJax) {
-            setTimeout(() => {
-                window.MathJax.Hub.Queue(["Typeset", window.MathJax.Hub]);
-            }, 0);
+            const typeset = async () => {
+                try {
+                    await window.MathJax.startup?.promise;
+                    await window.MathJax.typesetPromise();
+                } catch (err) {
+                    console.error('Typeset failed:', err);
+                }
+            };
+            typeset();
         }
     }, [latexExpression]);
 
@@ -68,9 +81,7 @@ export default function Home() {
             setDictOfVars({});
             setReset(false);
         }
-    }, [reset]);
-
-    useEffect(() => {
+    }, [reset]);    useEffect(() => {
         const canvas = canvasRef.current;
     
         if (canvas) {
@@ -83,16 +94,25 @@ export default function Home() {
             }
         }
 
+        // Configure MathJax before loading the script
+        window.MathJax = window.MathJax || {};
+        // Add configuration while preserving required properties
+        Object.assign(window.MathJax, {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            startup: {
+                typeset: false
+            }
+        });
+
         const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-MML-AM_CHTML';
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
         script.async = true;
         document.head.appendChild(script);
-
-        script.onload = () => {
-            window.MathJax.Hub.Config({
-                tex2jax: {inlineMath: [['$', '$'], ['\\(', '\\)']]},
-            });
-        };
 
         return () => {
             document.head.removeChild(script);
@@ -163,6 +183,13 @@ export default function Home() {
                     {
                         image: canvas.toDataURL('image/png'),
                         dict_of_vars: dictOfVars
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        withCredentials: false // Set to true if you need to send cookies
                     }
                 );
 
